@@ -12,8 +12,8 @@ se mantiene en un solo lugar y sirve para todos los stores.
 | `push-on-commit.yml` | Deploya el diff de una branch `theme/*` al theme (nunca al live) | `push` a `theme/**` |
 | `mirror.yml` | Pulea el live del store a `main` (el espejo) | `schedule` + `workflow_dispatch` |
 | `adopt-theme.yml` | Adopta un theme creado en el admin (branch + registro, `origin: manual`) | `repository_dispatch` (webhook) + `workflow_dispatch` |
-
-> `merge.yml` / `merge-apply.yml` (flujo merchant/dev) se portan en un slice posterior.
+| `merge.yml` | Dry run de merge entre dos themes (etapa 4a): reporta conflicto y archivos, no pushea | `workflow_dispatch` |
+| `merge-apply.yml` | Merge real (etapa 4b): push scopeado al destino o link de compare ante conflicto | `workflow_dispatch` |
 
 ## Contrato (cómo invocarlas desde un store)
 
@@ -107,6 +107,14 @@ jobs:
 
 ## Versionado
 
-Las reusables se referencian por tag inmutable: `...@v1`. Al iterar la lógica se publica
-un tag nuevo (`v2`, …) y los stores migran cuando conviene — un cambio en core **no**
-rompe a los stores hasta que muevan el `@vN`.
+Los thin callers referencian el tag mayor **móvil** `@v1` (mismo patrón que
+`actions/checkout@v4`). Cambios compatibles — agregar un workflow, fixes — **mueven**
+`v1` al commit nuevo y todos los stores los toman sin tocar sus callers:
+
+```bash
+git tag -f v1 && git push -f origin v1
+```
+
+Un cambio **incompatible** (romper inputs/outputs) se publica como `v2`; los stores
+migran su `@v1` → `@v2` cuando convenga. Así un cambio en core nunca rompe a un store
+hasta que mueva su `@vN`.
