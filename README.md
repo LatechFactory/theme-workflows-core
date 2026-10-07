@@ -1,6 +1,6 @@
 # theme-workflows-core
 
-Workflows **reutilizables** (`workflow_call`) del sistema de themes de Latech. La lógica
+Workflows **reutilizables** (`workflow_call`) del developer agent de themes de Latech. La lógica
 vive acá, **una sola vez**; cada repo de store la invoca con *thin callers* mínimos. Así
 se mantiene en un solo lugar y sirve para todos los stores.
 
