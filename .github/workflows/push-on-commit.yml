@@ -18,9 +18,8 @@ on:
 permissions:
   contents: write
 
-concurrency:
-  group: registry
-  cancel-in-progress: false
+# Sin `concurrency` aca: la serializacion (grupo "registry") la pone el thin caller
+# del store. Ponerla en ambos lados genera un deadlock de concurrency al anidar.
 
 env:
   SHOPIFY_CLI_THEME_TOKEN: ${{ secrets.SHOPIFY_THEME_TOKEN }}
