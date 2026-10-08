@@ -1,0 +1,54 @@
+name: list-themes (reusable)
+
+# Workflow REUSABLE (workflow_call). FASE 1: lista los themes del store (id, título, rol)
+# con el Theme Access token y escribe `themes-live.json` en main (commit solo si cambió),
+# para que eve lo lea por la API de GitHub. NO baja código — solo el listado.
+# Es read-mostly: la mayoría de las corridas no cambian nada (no commitean).
+
+on:
+  workflow_call:
+    inputs:
+      shop_domain:
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  SHOPIFY_CLI_THEME_TOKEN: ${{ secrets.SHOPIFY_THEME_TOKEN }}
+  SHOPIFY_FLAG_STORE: ${{ inputs.shop_domain }}
+
+jobs:
+  list:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - run: npm i -g @shopify/cli
+
+      - name: Listar themes (id, nombre, rol)
+        run: |
+          shopify theme list --json \
+            | jq 'sort_by(.id) | [ .[] | { id, name, role } ]' > themes-live.json
+          echo "themes-live.json:"; cat themes-live.json
+
+      - name: Commit si cambió
+        run: |
+          git config user.name "theme-merge"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add themes-live.json
+          if git diff --cached --quiet; then
+            echo "Sin cambios en themes-live.json"
+          else
+            git commit -m "themes-live: actualizar listado"
+            git pull --rebase origin main
+            git push origin main
+          fi
