@@ -34,10 +34,12 @@ jobs:
 
       - run: npm i -g @shopify/cli
 
-      - name: Listar themes (id, nombre, rol)
+      - name: Listar themes (id, nombre, rol, fechas si existen)
         run: |
+          # Orden estable por id en el archivo (minimiza diffs); eve reordena para mostrar.
+          # updated_at/created_at quedan en null si el CLI no los provee (eve cae a id).
           shopify theme list --json \
-            | jq 'sort_by(.id) | [ .[] | { id, name, role } ]' > themes-live.json
+            | jq 'sort_by(.id) | [ .[] | { id, name, role, updated_at, created_at } ]' > themes-live.json
           echo "themes-live.json:"; cat themes-live.json
 
       - name: Commit si cambió
