@@ -1,0 +1,135 @@
+name: prepare-theme (reusable)
+
+# Workflow REUSABLE (workflow_call). FASE 2: prepara la branch de trabajo de un theme
+# EXISTENTE con SU contenido actual, para fixear SOBRE él (no desde el live). Maneja dos
+# casos:
+#   - NO adoptado: refresca main con el live (freshness), crea la branch desde el live,
+#     pullea el contenido del theme, y lo registra en themes.json (origin: manual).
+#   - YA adoptado: usa su branch existente y pullea el contenido ACTUAL del theme (captura
+#     lo que el merchant tocó directo en ese theme desde la última vez).
+# NO publica. El live nunca es destino (guard de rol).
+
+on:
+  workflow_call:
+    inputs:
+      theme_id:
+        description: "Theme ID a preparar"
+        required: true
+        type: string
+      shop_domain:
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  SHOPIFY_CLI_THEME_TOKEN: ${{ secrets.SHOPIFY_THEME_TOKEN }}
+  SHOPIFY_FLAG_STORE: ${{ inputs.shop_domain }}
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - run: npm i -g @shopify/cli
+
+      - name: Configurar git
+        run: |
+          git config user.name "theme-merge"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Resolver theme y branch
+        id: resolve
+        run: |
+          THEME_ID="${{ inputs.theme_id }}"
+          case "$THEME_ID" in ''|*[!0-9]*) echo "Theme ID invalido: '$THEME_ID'"; exit 1 ;; esac
+
+          # Rol + nombre del theme (guard: no el live).
+          ROW=$(shopify theme list --json | jq -c --argjson id "$THEME_ID" '.[] | select(.id == $id)')
+          if [ -z "$ROW" ]; then echo "El theme $THEME_ID no existe en la tienda."; exit 1; fi
+          ROLE=$(echo "$ROW" | jq -r '.role')
+          NAME=$(echo "$ROW" | jq -r '.name')
+          echo "Theme $THEME_ID — nombre: $NAME | rol: $ROLE"
+          if [ "$ROLE" = "live" ]; then
+            echo "El theme $THEME_ID es el live; no se prepara como theme de trabajo."; exit 1
+          fi
+
+          # ¿Ya está registrado?
+          git show origin/main:themes.json > /tmp/reg.json 2>/dev/null || echo '{}' > /tmp/reg.json
+          BRANCH=$(jq -r --arg id "$THEME_ID" '.[$id].branch // empty' /tmp/reg.json)
+
+          if [ -n "$BRANCH" ]; then
+            echo "Ya adoptado → branch existente: $BRANCH"
+            git fetch origin "$BRANCH"
+            git checkout -B "$BRANCH" "origin/$BRANCH"
+            echo "REGISTERED=1" >> "$GITHUB_ENV"
+          else
+            echo "No adoptado → crear branch desde el live"
+            # Refrescar el espejo del live en main (freshness: el merchant pudo tocar el live).
+            shopify theme pull --live --force --path .
+            git add -A
+            if ! git diff --cached --quiet; then
+              git commit -m "mirror: previo a preparar $THEME_ID"
+              git pull --rebase origin main
+              git push origin main
+            fi
+            SLUG=$(echo "$NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]\+/-/g; s/^-//; s/-$//')
+            [ -z "$SLUG" ] && SLUG="theme-$THEME_ID"
+            BRANCH="theme/$SLUG"
+            if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
+              BRANCH="theme/$SLUG-$THEME_ID"
+            fi
+            git checkout -B "$BRANCH" main
+            git push -u origin "$BRANCH"
+            echo "REGISTERED=0" >> "$GITHUB_ENV"
+          fi
+
+          echo "THEME_ID=$THEME_ID" >> "$GITHUB_ENV"
+          echo "BRANCH=$BRANCH"     >> "$GITHUB_ENV"
+          echo "NAME=$NAME"         >> "$GITHUB_ENV"
+
+      - name: Pull del contenido actual del theme a la branch
+        run: |
+          shopify theme pull --theme "$THEME_ID" --force --path .
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -m "prepare: contenido actual del theme $THEME_ID"
+            git push origin HEAD
+          else
+            echo "La branch ya tenia el contenido actual del theme."
+          fi
+
+      - name: Registrar en themes.json (si no estaba)
+        if: env.REGISTERED == '0'
+        run: |
+          git checkout main
+          git pull --rebase origin main
+          [ -f themes.json ] || echo '{}' > themes.json
+          if [ "$(jq -r --arg id "$THEME_ID" 'has($id)' themes.json)" != "true" ]; then
+            jq --arg id "$THEME_ID" --arg branch "$BRANCH" --arg title "$NAME" \
+               --arg created "$(date -u +%Y-%m-%d)" \
+               '.[$id] = { branch: $branch, title: $title, ticket: "", origin: "manual", created: $created, last_push: null, status: "open" }' \
+               themes.json > tmp.json && mv tmp.json themes.json
+            git add themes.json
+            git commit -m "registro (fix): $NAME ($THEME_ID)"
+            git pull --rebase origin main
+            git push origin main
+          fi
+
+      - name: Resumen
+        run: |
+          {
+            echo "### Theme preparado para fix"
+            echo "- Theme: \`$THEME_ID\` ($NAME)"
+            echo "- Branch: \`$BRANCH\`"
+            echo "- [Preview](https://${{ inputs.shop_domain }}/?_ab=0&_fd=0&_sc=1&preview_theme_id=$THEME_ID)"
+          } >> "$GITHUB_STEP_SUMMARY"
