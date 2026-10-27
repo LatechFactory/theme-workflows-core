@@ -40,7 +40,7 @@ jobs:
         with:
           node-version: 22
 
-      - run: npm i -g @shopify/cli
+      - run: npm i -g @shopify/cli@4.9.5
 
       - name: Configurar git
         run: |
