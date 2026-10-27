@@ -74,8 +74,8 @@ jobs:
       - name: Consultar roles
         run: |
           LIST=$(shopify theme list --json)
-          ROLE_X=$(echo "$LIST" | jq -r --argjson id "$X" '.[] | select(.id == $id) | .role')
-          ROLE_A=$(echo "$LIST" | jq -r --argjson id "$A" '.[] | select(.id == $id) | .role')
+          ROLE_X=$(echo "$LIST" | jq -r --arg id "$X" 'first(.. | objects | select(has("role") and (.id|tostring) == $id)) | .role')
+          ROLE_A=$(echo "$LIST" | jq -r --arg id "$A" 'first(.. | objects | select(has("role") and (.id|tostring) == $id)) | .role')
 
           echo "ROLE_X=${ROLE_X:-desconocido}" >> "$GITHUB_ENV"
           echo "ROLE_A=${ROLE_A:-desconocido}" >> "$GITHUB_ENV"

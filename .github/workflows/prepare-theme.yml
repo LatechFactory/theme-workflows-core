@@ -54,7 +54,7 @@ jobs:
           case "$THEME_ID" in ''|*[!0-9]*) echo "Theme ID invalido: '$THEME_ID'"; exit 1 ;; esac
 
           # Rol + nombre del theme (guard: no el live).
-          ROW=$(shopify theme list --json | jq -c --argjson id "$THEME_ID" '.[] | select(.id == $id)')
+          ROW=$(shopify theme list --json | jq -c --arg id "$THEME_ID" 'first(.. | objects | select(has("role") and (.id|tostring) == $id))')
           if [ -z "$ROW" ]; then echo "El theme $THEME_ID no existe en la tienda."; exit 1; fi
           ROLE=$(echo "$ROW" | jq -r '.role')
           NAME=$(echo "$ROW" | jq -r '.name')

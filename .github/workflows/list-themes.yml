@@ -36,10 +36,24 @@ jobs:
 
       - name: Listar themes (id, nombre, rol, fechas si existen)
         run: |
-          # Orden estable por id en el archivo (minimiza diffs); eve reordena para mostrar.
-          # updated_at/created_at quedan en null si el CLI no los provee (eve cae a id).
-          shopify theme list --json \
-            | jq 'sort_by(.id) | [ .[] | { id, name, role, updated_at, created_at } ]' > themes-live.json
+          # El formato de `theme list --json` varía según la versión del CLI y la config
+          # del repo: a veces es un array plano de themes, a veces viene envuelto
+          # (p. ej. {environments:[{result:...}]}). En lugar de asumir la forma, juntamos
+          # recursivamente todos los objetos de theme (los que tienen id y role) — robusto
+          # ante cambios de wrapper. Orden estable por id (minimiza diffs); eve reordena
+          # para mostrar. updated_at/created_at quedan en null si el CLI no los provee
+          # (eve cae a id). Acepta camelCase por si una versión nueva los renombra.
+          shopify theme list --json > raw-themes.json
+          echo "=== raw theme list ==="; cat raw-themes.json; echo "======================"
+          jq '[ .. | objects | select(has("id") and has("role")) ]
+                | sort_by(.id)
+                | [ .[] | {
+                    id,
+                    name,
+                    role,
+                    updated_at: (.updated_at // .updatedAt // null),
+                    created_at: (.created_at // .createdAt // null)
+                  } ]' raw-themes.json > themes-live.json
           echo "themes-live.json:"; cat themes-live.json
 
       - name: Commit si cambió

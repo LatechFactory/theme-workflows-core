@@ -65,8 +65,8 @@ jobs:
           case "$A" in ''|*[!0-9]*) echo "Destino invalido: '$A'"; exit 1 ;; esac
 
           LIST=$(shopify theme list --json)
-          ROW_X=$(echo "$LIST" | jq -c --argjson id "$X" '.[] | select(.id == $id)')
-          ROW_A=$(echo "$LIST" | jq -c --argjson id "$A" '.[] | select(.id == $id)')
+          ROW_X=$(echo "$LIST" | jq -c --arg id "$X" 'first(.. | objects | select(has("role") and (.id|tostring) == $id))')
+          ROW_A=$(echo "$LIST" | jq -c --arg id "$A" 'first(.. | objects | select(has("role") and (.id|tostring) == $id))')
           [ -z "$ROW_X" ] && { echo "El origen $X no existe en la tienda."; exit 1; }
           [ -z "$ROW_A" ] && { echo "El destino $A no existe en la tienda."; exit 1; }
 
@@ -188,7 +188,7 @@ jobs:
           # El rol se re-consulta inmediatamente antes del push (DESIGN 6.1):
           # entre el guard inicial y aca alguien pudo publicar el theme.
           ROLE=$(shopify theme list --json \
-            | jq -r --argjson id "$A" '.[] | select(.id == $id) | .role')
+            | jq -r --arg id "$A" 'first(.. | objects | select(has("role") and (.id|tostring) == $id)) | .role')
           echo "Rol destino (pre-push): $ROLE"
           if [ "$ROLE" != "unpublished" ]; then
             echo "ABORTADO: destino $A tiene rol '$ROLE' (se esperaba unpublished)"

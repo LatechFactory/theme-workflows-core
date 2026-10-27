@@ -63,8 +63,8 @@ jobs:
       - name: Verificar que no sea el live
         run: |
           ROLE=$(shopify theme list --json \
-            | jq -r --argjson id "$THEME_ID" \
-              '.[] | select(.id == $id) | .role')
+            | jq -r --arg id "$THEME_ID" \
+              'first(.. | objects | select(has("role") and (.id|tostring) == $id)) | .role')
 
           echo "Rol del theme: $ROLE"
 
